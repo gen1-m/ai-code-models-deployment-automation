@@ -1,0 +1,4 @@
+https://github.com/benedekrozemberczki/karateclub
+https://github.com/pyg-team/pytorch_geometric
+https://github.com/lukecavabarrett/pna
+https://github.com/IllinoisGraphBenchmark/IGB-Datasets
