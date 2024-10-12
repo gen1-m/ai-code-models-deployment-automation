@@ -1,0 +1,8 @@
+gitpython==3.1.31        # For cloning repositories using Python
+pandas==1.5.3            # For handling leaderboard data
+subprocess-runner==1.0.0 # For running shell commands (used internally in Python's subprocess module)
+pipreqs==0.4.11          # To generate requirements.txt if missing
+scikit-learn==1.2.2      # Placeholder for evaluating models with metrics (e.g., accuracy, F1-score)
+
+# Optional for enhanced logging and handling:
+loguru==0.6.0            # For better logging (optional)

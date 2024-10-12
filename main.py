@@ -18,8 +18,10 @@ def process_repository(repo_url):
 
 if __name__ == "__main__":
     repos = [
-        "https://github.com/user/repo1",
-        "https://github.com/user/repo2"
+        "https://github.com/benedekrozemberczki/karateclub",
+        "https://github.com/pyg-team/pytorch_geometric",
+        "https://github.com/lukecavabarrett/pna",
+        "https://github.com/IllinoisGraphBenchmark/IGB-Datasets",
     ]
 
     for repo_url in repos:
