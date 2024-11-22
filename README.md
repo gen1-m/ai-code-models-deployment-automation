@@ -19,3 +19,4 @@ The project is structured as follows:
 │   ├── script_identifier.py
 ├── utils.py
 └── requirements.txt
+├── main.py
