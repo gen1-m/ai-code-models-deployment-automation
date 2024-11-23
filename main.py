@@ -1,11 +1,11 @@
 # main.py
 
-from repo_manager import clone_repository, setup_dependencies
-from script_identifier import find_main_script
-from model_runner import run_model
-from evaluator import evaluate_model
-from leaderboard import update_leaderboard, display_leaderboard
-from readme_parser import generate_main_script_from_readme
+from scripts.repo_manager import clone_repository, setup_dependencies
+from scripts.script_identifier import find_main_script
+from scripts.model_runner import run_model
+from scripts.evaluator import evaluate_model
+from scripts.leaderboard import update_leaderboard, display_leaderboard
+from scripts.readme_parser import generate_main_script_from_readme
 
 def process_repository(repo_url):
     """Complete process for cloning, running, and evaluating a repository."""
@@ -24,10 +24,7 @@ def process_repository(repo_url):
 
 if __name__ == "__main__":
     repos = [
-        "https://github.com/benedekrozemberczki/karateclub",
-        "https://github.com/pyg-team/pytorch_geometric",
-        "https://github.com/lukecavabarrett/pna",
-        "https://github.com/IllinoisGraphBenchmark/IGB-Datasets",
+        "https://github.com/anubhavparas/image-classification-using-cnn.git",
     ]
 
     for repo_url in repos:
