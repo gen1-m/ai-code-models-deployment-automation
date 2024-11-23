@@ -1,24 +1,27 @@
 # script_identifier.py
 
 import os
-from transformers import pipeline, GPT2Tokenizer, GPT2LMHeadModel
+from openai import OpenAI
+from dotenv import load_dotenv
 
-# Load the tokenizer and model manually
-tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
-model = GPT2LMHeadModel.from_pretrained("distilgpt2")
+# Ensure environment variables are loaded
+load_dotenv()
 
-# Ensure padding token is defined (since distilgpt2 doesn't have a pad token)
-tokenizer.pad_token = tokenizer.eos_token
+# Initialize the OpenAI client
+client = OpenAI(api_key=os.getenv("PROFESSORS_API_KEY"))
 
-# Set up the pipeline using the explicitly configured tokenizer and model
-dependency_resolver = pipeline(
-    'text-generation',
-    model=model,
-    tokenizer=tokenizer
-)
+def find_python_files(repo_path):
+    """Recursively find all Python files in the repository."""
+    python_files = []
+    for root, _, files in os.walk(repo_path):
+        for file in files:
+            if file.endswith('.py'):
+                python_files.append(os.path.join(root, file))
+    return python_files
 
 def find_main_script(repo_path):
     """Identify the main script to run the model."""
+    # Check for conventional main scripts in the root directory
     for script_name in ['main.py', 'train.py', 'run.py']:
         potential_path = os.path.join(repo_path, script_name)
         if os.path.exists(potential_path):
@@ -27,26 +30,47 @@ def find_main_script(repo_path):
 
     # No conventional main script found, use LLM to identify a potential entry point
     print("No conventional main script found. Attempting to identify using LLM.")
-    repo_files = [f for f in os.listdir(repo_path) if f.endswith('.py')]
-    for script in repo_files:
-        with open(os.path.join(repo_path, script), 'r') as file:
-            content = file.read()
-            prompt = f"""
-            Analyze the following Python script and determine if it can be the entry point for a machine learning model:
-            {content}
-            Does this script contain the main entry point (e.g., training loop, command-line arguments)? Respond with 'yes' or 'no' and why.
-            """
-            response = dependency_resolver(
-                prompt,
-                max_new_tokens=150,  # Use max_new_tokens for the output
-                num_return_sequences=1,
-                truncation=True,  # Enable truncation
-                pad_token_id=tokenizer.eos_token_id  # Explicitly set pad_token_id to eos_token_id
-            )[0]['generated_text']
+    python_files = find_python_files(repo_path)
 
-            if 'yes' in response.lower():
-                print(f"Identified entry point in: {script}")
-                return script
+    for script_path in python_files:
+        with open(script_path, 'r') as file:
+            content = file.read()
+
+            # Build a detailed prompt for analysis
+            relative_path = os.path.relpath(script_path, repo_path)
+            prompt = f"""
+            You are analyzing the structure of a machine learning repository.
+            
+            Below is the content of a Python script located at `{relative_path}`:
+            ---
+            {content}
+            ---
+            Determine if this script is the main entry point for running a machine learning model. 
+            This means the script should contain functionalities like training loops, evaluation routines, or command-line arguments.
+            
+            Respond with 'yes' or 'no' and provide a brief explanation:
+            """
+
+            try:
+                # Call OpenAI's ChatGPT API
+                response = client.chat.completions.create(
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    model="gpt-4",
+                    temperature=0,
+                    max_tokens=300
+                )
+
+                # Extract and process the response
+                decision = response.choices[0].message.content.strip().lower()
+
+                if 'yes' in decision:
+                    print(f"Identified entry point in: {relative_path}")
+                    return relative_path
+
+            except Exception as e:
+                print(f"Error while analyzing {relative_path} with OpenAI API: {e}")
 
     print("Unable to identify an entry point. Proceeding to README analysis.")
     return None
