@@ -1,25 +1,29 @@
-# repo_manager.py
-
-from transformers import pipeline, GPT2Tokenizer, GPT2LMHeadModel
-from utils import clean_requirements_output
 import os
 import git
 import subprocess
+from openai import OpenAI
+from dotenv import load_dotenv
+import re
+from utils import clean_requirements_output
 
+# Ensure environment variables are loaded
+load_dotenv()
 
-# Load the tokenizer and model manually
-tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
-model = GPT2LMHeadModel.from_pretrained("distilgpt2")
+# Initialize the OpenAI client
+client = OpenAI(api_key=os.getenv("PROFESSORS_API_KEY"))
 
-# Ensure padding token is defined (since distilgpt2 doesn't have a pad token)
-tokenizer.pad_token = tokenizer.eos_token
-
-# Set up the pipeline using the explicitly configured tokenizer and model
-dependency_resolver = pipeline(
-    'text-generation',
-    model=model,
-    tokenizer=tokenizer
-)
+# Known mapping of import names to pip install names
+import_to_pip_mapping = {
+    "cv2": "opencv-python",  # opencv package is imported as cv2 but installed as opencv-python
+    "tensorflow": "tensorflow",  # Same name for both install and import
+    "torch": "torch",  # Same name for both install and import
+    "pandas": "pandas",  # Same name for both install and import
+    "sklearn": "scikit-learn",  # scikit-learn is imported as sklearn
+    "flask": "flask",  # Same name for both install and import
+    "requests": "requests",  # Same name for both install and import
+    "beautifulsoup4": "beautifulsoup4",  # Same name for both install and import
+    # Add more common mappings as needed
+}
 
 def clone_repository(repo_url, repo_path='repositories'):
     """Clone a GitHub repository into a specified path."""
@@ -32,63 +36,128 @@ def clone_repository(repo_url, repo_path='repositories'):
         print(f"Repository already cloned: {repo_url}")
     return local_path
 
+def extract_imports_from_files(repo_path):
+    """
+    Extract all imported packages from Python files in the repository.
+    Excludes local module imports by checking the existence of the module in the repo.
+    """
+    imported_packages = set()
+    local_modules = set()
+
+    # Collect all local module names (files and directories in the repo)
+    for root, dirs, files in os.walk(repo_path):
+        for name in files:
+            if name.endswith('.py'):
+                local_modules.add(os.path.splitext(name)[0])  # Add module names (without .py)
+        for name in dirs:
+            local_modules.add(name)  # Add directory names (potential module folders)
+
+    # Parse imports from Python files
+    for root, _, files in os.walk(repo_path):
+        for file in files:
+            if file.endswith(".py"):
+                file_path = os.path.join(root, file)
+                with open(file_path, 'r', errors="ignore") as f:
+                    for line in f:
+                        match = re.match(r'^\s*(?:import|from)\s+([a-zA-Z0-9_]+)', line)
+                        if match:
+                            module_name = match.group(1)
+                            # If it's not a local module, consider it a pip package
+                            if module_name not in local_modules:
+                                imported_packages.add(module_name)
+
+    return imported_packages
+
+def compare_requirements_with_imports(requirements_path, imported_packages):
+    """Compare imports with requirements.txt and identify missing packages."""
+    existing_packages = set()
+    if os.path.exists(requirements_path):
+        with open(requirements_path, 'r') as file:
+            for line in file:
+                package = line.split('==')[0].strip()  # Extract package name without version
+                existing_packages.add(package)
+
+    missing_packages = imported_packages - existing_packages
+    return missing_packages
+
+def map_import_to_pip_package(import_name):
+    """Map import names to pip install package names using the predefined mapping."""
+    return import_to_pip_mapping.get(import_name, import_name)
+
+def install_missing_packages(missing_packages):
+    """Install missing packages directly using pip."""
+    for package in missing_packages:
+        # Check if the import name matches a known mapping for installation
+        install_package = map_import_to_pip_package(package)
+        
+        try:
+            print(f"Installing missing package: {install_package}")
+            subprocess.run(['pip', 'install', install_package], check=True)
+        except subprocess.CalledProcessError:
+            print(f"Failed to install package: {install_package}. Please check manually.")
+
 def setup_dependencies(repo_path):
-    """Try to install dependencies and handle conflicts using Hugging Face LLM."""
+    """Install dependencies and ensure all required packages are included."""
     requirements_path = os.path.join(repo_path, 'requirements.txt')
 
-    if os.path.exists(requirements_path):
-        try:
-            subprocess.run(['pip', 'install', '-r', requirements_path], check=True)
-        except subprocess.CalledProcessError:
-            print(f"Conflict detected while installing from {requirements_path}. Attempting to resolve with LLM agent.")
-            resolve_dependency_conflicts(requirements_path)
-    else:
-        # Generate requirements.txt with pipreqs and verify with pip-chill
-        print("Generating requirements.txt using pipreqs")
-        subprocess.run(['pipreqs', repo_path], check=True)
-        pip_chill_output = subprocess.run(['pip-chill'], capture_output=True, text=True)
-        
-        with open(requirements_path, 'w') as file:
-            file.write(pip_chill_output.stdout)
+    # Extract imported packages from all Python files in the repository
+    print("Extracting imported packages...")
+    imported_packages = extract_imports_from_files(repo_path)
 
-        # Attempt to install again
-        try:
-            subprocess.run(['pip', 'install', '-r', requirements_path], check=True)
-        except subprocess.CalledProcessError:
-            print("Dependencies installation failed after generating requirements.txt. Trying to resolve with LLM.")
-            resolve_dependency_conflicts(requirements_path)
+    # Compare and identify missing packages
+    missing_packages = compare_requirements_with_imports(requirements_path, imported_packages)
+
+    # Install missing packages directly with pip
+    if missing_packages:
+        print("Missing packages detected. Installing missing packages...")
+        install_missing_packages(missing_packages)
+
+    # Now that all dependencies are installed, generate the updated requirements.txt
+    try:
+        print("Generating updated requirements.txt using pip freeze...")
+        subprocess.run(['pip', 'freeze'], stdout=open(requirements_path, 'w'), check=True)
+    except subprocess.CalledProcessError:
+        print(f"Failed to generate updated {requirements_path}. Please check manually.")
 
 def resolve_dependency_conflicts(requirements_path):
-    """Use Hugging Face LLM to resolve dependency conflicts in requirements.txt."""
+    """Use OpenAI's LLM to resolve dependency conflicts in requirements.txt."""
     with open(requirements_path, 'r') as file:
         requirements = file.read()
 
     # Prompt to fix requirements
     prompt = f"""
-    The following requirements.txt has conflicting dependencies:
+    The following requirements.txt has missing or conflicting dependencies:
     {requirements}
 
-    Correct these conflicts and provide only the fixed requirements list without any explanations or additional text.
-    Each package should be on a separate line in a valid requirements.txt format:
+    Correct these issues and provide a fixed requirements list without any explanations or additional text.
+    Each package should be on a separate line in valid requirements.txt format:
     """
 
-    # Generate response using adjusted model settings
-    response = dependency_resolver(
-        prompt,
-        max_new_tokens=200,  # Use max_new_tokens instead of max_length for output length
-        num_return_sequences=1,
-        truncation=True,  # Explicitly enable truncation
-        pad_token_id=tokenizer.eos_token_id  # Explicitly set pad_token_id to eos_token_id
-    )[0]['generated_text']
-
-    # Clean and validate the generated requirements
-    corrected_requirements = clean_requirements_output(response)
-
-    with open(requirements_path, 'w') as file:
-        file.write(corrected_requirements)
-
-    # Retry installation
     try:
-        subprocess.run(['pip', 'install', '-r', requirements_path], check=True)
-    except subprocess.CalledProcessError:
-        print("Failed to install dependencies after LLM conflict resolution. Manual intervention may be required.")
+        # Call OpenAI's ChatGPT API using the client
+        response = client.chat.completions.create(
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            model="gpt-4",
+            temperature=0,
+            max_tokens=200
+        )
+
+        # Extract the generated requirements
+        corrected_requirements = response.choices[0].message.content.strip()
+
+        # Clean and validate the generated requirements
+        corrected_requirements = clean_requirements_output(corrected_requirements)
+
+        with open(requirements_path, 'w') as file:
+            file.write(corrected_requirements)
+
+        # Retry installation
+        try:
+            subprocess.run(['pip', 'install', '-r', requirements_path], check=True)
+        except subprocess.CalledProcessError:
+            print("Failed to install dependencies after LLM conflict resolution. Manual intervention may be required.")
+
+    except Exception as e:
+        print(f"Error while resolving dependency conflicts with OpenAI API: {e}")
