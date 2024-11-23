@@ -34,6 +34,32 @@ Before running the project, ensure you have the following installed:
 - [Python >= 3.10](https://www.python.org/downloads/)
 - [Git](https://github.com/git-guides/install-git)
 
+Also you need to have an OpenAI API key. You can get one [here](https://platform.openai.com/account/api-keys).
+
+You should set the API key by creating a `.env` file in the root directory of the project and adding the following line:
+
+```
+OPENAI_API_KEY=YOUR_API_KEY
+```
+
+After that, the project structure should look like this:
+
+```
+├── .env
+├── .gitignore
+├── README.md
+├── scripts
+│   ├── evaluator.py
+│   ├── leaderboard.py
+│   ├── model_runner.py
+│   ├── readme_parser.py
+│   ├── repo_manager.py
+│   ├── script_identifier.py
+├── utils.py
+└── requirements.txt
+├── main.py
+``` 
+
 ## Usage
 
 To run the project, follow these steps:
