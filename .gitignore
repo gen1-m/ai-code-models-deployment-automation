@@ -52,3 +52,9 @@ repositories/
 
 # Leaderboard outputs
 leaderboard.csv
+
+# Distribution and egg-info folders
+dist/
+build/
+.eggs/
+
