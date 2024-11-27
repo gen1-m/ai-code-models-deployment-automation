@@ -3,6 +3,12 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Ensure environment variables are loaded
 load_dotenv()
@@ -25,11 +31,11 @@ def find_main_script(repo_path):
     for script_name in ['main.py', 'train.py', 'run.py']:
         potential_path = os.path.join(repo_path, script_name)
         if os.path.exists(potential_path):
-            print(f"Found main script: {script_name}")
+            logging.info(f"Found main script: {script_name}")
             return script_name
 
     # No conventional main script found, use LLM to identify a potential entry point
-    print("No conventional main script found. Attempting to identify using LLM.")
+    logging.info("No conventional main script found. Attempting to identify using LLM.")
     python_files = find_python_files(repo_path)
 
     for script_path in python_files:
@@ -66,11 +72,11 @@ def find_main_script(repo_path):
                 decision = response.choices[0].message.content.strip().lower()
 
                 if 'yes' in decision:
-                    print(f"Identified entry point in: {relative_path}")
+                    logging.info(f"Identified entry point in: {relative_path}")
                     return relative_path
 
             except Exception as e:
-                print(f"Error while analyzing {relative_path} with OpenAI API: {e}")
+                logging.error(f"Error while analyzing {relative_path} with OpenAI API: {e}")
 
-    print("Unable to identify an entry point. Proceeding to README analysis.")
+    logging.error("Unable to identify an entry point. Proceeding to README analysis.")
     return None
