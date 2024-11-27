@@ -3,6 +3,13 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 # Ensure environment variables are loaded
 load_dotenv()
@@ -24,7 +31,7 @@ def generate_main_script_from_readme(repo_path):
     """
     readme_path = os.path.join(repo_path, 'README.md')
     if not os.path.exists(readme_path):
-        print("No README.md found to generate the main script.")
+        logging.error("No README.md found to generate the main script.")
         return None
 
     with open(readme_path, 'r') as file:
@@ -63,10 +70,10 @@ def generate_main_script_from_readme(repo_path):
         with open(main_script_path, 'w') as file:
             file.write(generated_script)
 
-        print(f"Generated main.py at {main_script_path}")
+        logging.info(f"Generated main.py at {main_script_path}")
         return 'main.py'
 
     except Exception as e:
-        print(f"Error while generating the script with OpenAI API: {e}")
+        logging.error(f"Error while generating the script with OpenAI API: {e}")
         return None
 
