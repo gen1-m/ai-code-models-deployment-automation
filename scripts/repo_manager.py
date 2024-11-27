@@ -5,6 +5,12 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import re
 from utils import clean_requirements_output
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Ensure environment variables are loaded
 load_dotenv()
@@ -30,10 +36,10 @@ def clone_repository(repo_url, repo_path='repositories'):
     repo_name = repo_url.split('/')[-1].replace('.git', '')
     local_path = os.path.join(repo_path, repo_name)
     if not os.path.exists(local_path):
-        print(f"Cloning repository: {repo_url}")
+        logging.info(f"Cloning repository: {repo_url}")
         git.Repo.clone_from(repo_url, local_path)
     else:
-        print(f"Repository already cloned: {repo_url}")
+        logging.info(f"Repository already cloned: {repo_url}")
     return local_path
 
 def extract_imports_from_files(repo_path):
@@ -91,17 +97,17 @@ def install_missing_packages(missing_packages):
         install_package = map_import_to_pip_package(package)
         
         try:
-            print(f"Installing missing package: {install_package}")
+            logging.info(f"Installing missing package: {install_package}")
             subprocess.run(['pip', 'install', install_package], check=True)
         except subprocess.CalledProcessError:
-            print(f"Failed to install package: {install_package}. Please check manually.")
+            logging.error(f"Failed to install package: {install_package}. Please check manually.")
 
 def setup_dependencies(repo_path):
     """Install dependencies and ensure all required packages are included."""
     requirements_path = os.path.join(repo_path, 'requirements.txt')
 
     # Extract imported packages from all Python files in the repository
-    print("Extracting imported packages...")
+    logging.info("Extracting imported packages...")
     imported_packages = extract_imports_from_files(repo_path)
 
     # Compare and identify missing packages
@@ -109,15 +115,15 @@ def setup_dependencies(repo_path):
 
     # Install missing packages directly with pip
     if missing_packages:
-        print("Missing packages detected. Installing missing packages...")
+        logging.info("Missing packages detected. Installing missing packages...")
         install_missing_packages(missing_packages)
 
     # Now that all dependencies are installed, generate the updated requirements.txt
     try:
-        print("Generating updated requirements.txt using pip freeze...")
+        logging.info("Generating updated requirements.txt using pip freeze...")
         subprocess.run(['pip', 'freeze'], stdout=open(requirements_path, 'w'), check=True)
     except subprocess.CalledProcessError:
-        print(f"Failed to generate updated {requirements_path}. Please check manually.")
+        logging.info(f"Failed to generate updated {requirements_path}. Please check manually.")
 
 def resolve_dependency_conflicts(requirements_path):
     """Use OpenAI's LLM to resolve dependency conflicts in requirements.txt."""
@@ -157,7 +163,7 @@ def resolve_dependency_conflicts(requirements_path):
         try:
             subprocess.run(['pip', 'install', '-r', requirements_path], check=True)
         except subprocess.CalledProcessError:
-            print("Failed to install dependencies after LLM conflict resolution. Manual intervention may be required.")
+            logging.error("Failed to install dependencies after LLM conflict resolution. Manual intervention may be required.")
 
     except Exception as e:
-        print(f"Error while resolving dependency conflicts with OpenAI API: {e}")
+        logging.info(f"Error while resolving dependency conflicts with OpenAI API: {e}")
